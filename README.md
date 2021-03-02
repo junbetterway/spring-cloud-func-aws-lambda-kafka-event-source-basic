@@ -7,9 +7,11 @@ __[Spring Cloud Function](https://spring.io/projects/spring-cloud-function)__ en
 
 The main goal of this __[repository](https://github.com/junbetterway/spring-cloud-func-aws-lambda-kafka-event-source-basic)__ is to introduce you on how we can create a serverless function using __AWS Lambda__ and creating a trigger via an event source such as __Apache Kafka__. If you want to know the basic for Spring Cloud Stream/Function with Kafka Binder then please visit my previous __[tutorial](https://github.com/junbetterway/spring-cloud-func-kafka-stream-binder-basic)__. 
 
-__[AWS Lambda](https://aws.amazon.com/lambda/)__ now allows customers to build applications that can be triggered by messages in an Apache Kafka cluster hosted on any infrastructure - either __Self-managed Apache Kafka Cluster__ or __[AWS Managed Streaming for Kafka](https://aws.amazon.com/msk/)__. Customers can keep their existing Apache Kafka cluster as-is, and quickly and easily build Kafka consumer applications with Lambda without needing to worry about provisioning or managing servers. Please refer to the offical __[AWS Documentation](https://docs.aws.amazon.com/lambda/latest/dg/lambda-kafka.html)__ on how to use AWS Lambda with an Apache Kafka cluster for more details.
+__[AWS Lambda](https://aws.amazon.com/lambda/)__ now allows customers to build applications that can be triggered by messages in an Apache Kafka cluster hosted on any infrastructure - either __Self-managed Apache Kafka Cluster__ or __[AWS Managed Streaming for Kafka](https://aws.amazon.com/msk/)__. Customers can keep their existing Apache Kafka cluster as-is, and quickly and easily build Kafka consumer applications with Lambda without needing to worry about provisioning or managing servers. 
 
-I prefer this __[blog](https://aws.amazon.com/blogs/compute/using-self-hosted-apache-kafka-as-an-event-source-for-aws-lambda/)__ since it has some examples on how to completely configure self-managed Apache Kafka as Event Source for AWS Lambda. 
+Please refer to the offical __[AWS Documentation](https://docs.aws.amazon.com/lambda/latest/dg/lambda-kafka.html)__ on how to use AWS Lambda with an Apache Kafka cluster for more details.
+
+I prefer this __[AWS Blog](https://aws.amazon.com/blogs/compute/using-self-hosted-apache-kafka-as-an-event-source-for-aws-lambda/)__ since it has some examples on how to completely configure self-managed Apache Kafka as Event Source for AWS Lambda. 
 
 ## Getting Started
 Our main application is pretty simple with traditional bean definition:
@@ -55,7 +57,7 @@ spring:
           destination: topic-greetings
 ```
 
-Given this, if you recall from our previous __[tutorial](https://github.com/junbetterway/spring-cloud-func-aws-lambda-basic)__ we do not need anymore to define an environment variable __SPRING_CLOUD_FUNCTION_DEFINITION__ during our creation of AWS Lambda function since it is already configured on the above yml file. However, we need to make sure that we define the value for our environment variable __KAFKA_BROKERS__ which is/are the values of __Private IPv4 DNS__ of the configured EC2 instances with Kafka cluster.
+Given this, if you recall from our previous __[tutorial](https://github.com/junbetterway/spring-cloud-func-aws-lambda-basic)__ we do not need anymore to define an environment variable __SPRING_CLOUD_FUNCTION_DEFINITION__ during our creation of AWS Lambda function since it is already configured on the above yml file. However, we need to make sure that we define the value for our environment variable __KAFKA_BROKERS__ which is/are the values of __Private IPv4 DNS__ of the configured EC2 instances acting as Kafka brokers.
 
 ## Create Self-Managed Apache Kafka Cluster On AWS EC2 Instance
 ### A. Create The AWS Networking, Security Groups and EC2
@@ -126,8 +128,6 @@ vim /etc/systemd/system/kafka.service
 
 Paste below content:
 
-*__Note:__ The environment fields below will depend on your setup. For my case, I use a free-tier EC2 instance type thus limited memory which explains the value for __KAFKA_HEAP_OPTS__. Also, the __JAVA_HOME__ value will depend on your JDK installation path. One can check this by running the command __update-alternatives --config java__.*
-
 ```
 [Unit]
 Description=Apache Kafka Server
@@ -146,6 +146,8 @@ WantedBy=multi-user.target
 ```
 
 Save and exit
+
+*__Note:__ The environment fields above will depend on your setup. For my case, I use a free-tier EC2 instance type thus limited memory which explains the value for __KAFKA_HEAP_OPTS__. Also, the __JAVA_HOME__ value will depend on your JDK installation path. One can check this by running the command __update-alternatives --config java__.*
 
 5. Reload the systemd daemon to apply new changes.
 
@@ -177,7 +179,7 @@ One can check the status if active by running below command:
 sudo systemctl status kafka
 ```
 
-8. Create a Topic in Kafka. Spring Boot will automatically create it for you but remember we will use it as a trigger for our AWS Lambda so might as well create it now and configure our Spring Boot application to subscribe to these topics. We will create two topics: __topic-names__ and __topic-greetings__
+8. Create a __topic__ in Kafka. Spring Boot will automatically create it for you but remember we will use it as a trigger for our AWS Lambda so might as well create it now and configure our Spring Boot application to subscribe to these topics via the __application.yml__ file. We will create two topics: __topic-names__ and __topic-greetings__
 
 ```
 cd /usr/local/kafka
@@ -212,7 +214,7 @@ bin/kafka-console-consumer.sh --bootstrap-server localhost:9092 --topic topic-na
 
 you should see the messages you created in step 9.
 
-### C. Configure AWS Lambda With Apache Kafka As Trigger
+## Configure AWS Lambda With Apache Kafka As Trigger
 One can visit my previous basic __[tutorial](https://github.com/junbetterway/spring-cloud-func-aws-lambda-basic)__ on how to build your Spring Cloud Function as shaded JAR then use it to create an AWS Lambda function.
 1. Go to __[AWS Lambda Console](https://console.aws.amazon.com/lambda/home)__ then create a function by providing a unique name (__e.g.,__ MyGreeterFunc) and runtime environment (__e.g.,__ Java 11)
 2. Once successfully created, let's setup the configuration by uploading the AWS deployable shaded JAR (__springcloudfunc-0.0.1-SNAPSHOT-aws.jar__) under the __Function Code__ section
@@ -228,7 +230,7 @@ org.springframework.cloud.function.adapter.aws.FunctionInvoker::handleRequest
 KAFKA_BROKERS=ip-10-0-1-199.ap-southeast-1.compute.internal:9092
 ```
 
-5. Edit __Basic settings__ and increase the timeout from 15s to at least 1 minute. Feel free to add more memory (e.g., 1024).
+5. Edit __Basic settings__ and increase the timeout from __15s__ to at least __1 minute__. Feel free to add more memory (__e.g.,__ 1024).
 6. Now go to __Permissions__ tab and click the role name to open the IAM console. Aside from the existing __AWSLambdaBasicExecutionRole__ policy, add a new inline policy with a name __SelfHostedKafkaPolicy__ with the following permissions:
 
 ```
@@ -257,12 +259,12 @@ KAFKA_BROKERS=ip-10-0-1-199.ap-southeast-1.compute.internal:9092
 then save
 
 7. Back in the Lambda function, go back to the __Configuration__ tab. In the *Designer* panel, choose __Add trigger__.
-8. In the dropdown, select Apache Kafka:
+8. In the dropdown, select __Apache Kafka__:
 
 ```
 For Bootstrap servers, add each EC2 instances (with Kafka broker) private IPv4 DNS addresses with port 9092 appended.
-For Topic name, enter ‘topic-names’.
-Enter your preferred batch size and starting position values (see this documentation for more information).
+For Topic name, enter 'topic-names'.
+Enter your preferred batch size and starting position values
 For VPC, select the VPC you created earlier in section A above
 For VPC subnets, select the private subnet from section A above
 For VPC security groups, select the Kafka security group from section A above
@@ -284,7 +286,7 @@ cd /usr/local/kafka
 bin/kafka-console-producer.sh --broker-list localhost:9092 --topic topic-names
 ```
 
-then type a few messages (hit enter) into the console to send to the server (e.g., Jun King)
+then type a few messages (hit enter) into the console to send to the server (__e.g.,__ Jun King)
 
 2. In the AWS Lambda function, select the __Monitoring__ tab then choose __View logs in CloudWatch__. In the latest log stream, you should see the original event with the following logs:
 
@@ -310,13 +312,13 @@ then type a few messages (hit enter) into the console to send to the server (e.g
 }
 ```
 
-One thing to notice from above response is that we received a payload with no "Jun King" as part of it. Well, one thing to notice is the following key-value pair under the topic-names-0:
+One thing to notice from above response is that we received a __Hello there + JSON payload__ with no "Jun King" as part of it. Well, one thing to notice is the following key-value pair under the *topic-names-0* array:
 
 ```
 "value": "SnVuIEtpbmc="
 ```
 
-One can use this __[Online Base64Decoder](https://www.base64decode.org/)__ and enter the value "SnVuIEtpbmc=" then click Decode - one will get our expected String message "Jun King". I have posted a question on __[Stack Overflow](https://stackoverflow.com/questions/66435134/aws-lambda-with-apache-kafka-trigger-returns-problem-lambda-internal-error-pl)__ with an initial failure on the AWS Lambda trigger but has a follow-up question on the possible approach on this payload as we can simply decode this via our application code but that would mean we will have to traverse this and make our code AWS infra-aware. 
+One can use this __[Online Base64Decoder](https://www.base64decode.org/)__ and enter the value "SnVuIEtpbmc=" then click __Decode__ - one will get our expected String message "Jun King". I have posted a question on __[Stack Overflow](https://stackoverflow.com/questions/66435134/aws-lambda-with-apache-kafka-trigger-returns-problem-lambda-internal-error-pl)__ with an initial failure on the AWS Lambda trigger but has a follow-up question on the possible approach on this payload as we can simply decode this via our application code but that would mean we will have to traverse this and make our code AWS infra-aware. 
 
 In any case, doing another producer message will trigger our newly created AWS Lambda function thus, we have successfully created an event-triggered AWS Lambda function running a Spring Boot application and listening to a self-managed Apache Kafka cluster.
 
