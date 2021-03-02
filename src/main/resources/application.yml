@@ -1,0 +1,11 @@
+spring:
+  cloud:
+    function:      definition: greeter
+    stream:      kafka:
+        default:
+          consumer:
+            startOffset: earliest        binder:          brokers: ${KAFKA_BROKERS:localhost:9092}
+      bindings:        greeter-in-0:
+          destination: topic-names
+        greeter-out-0:
+          destination: topic-greetings                      
